@@ -6,6 +6,9 @@ const headers = {
 const json = (body, status) =>
   new Response(JSON.stringify(body), { status, headers });
 const serviceNames = [
+  "Aéroport de Genève",
+  "Gares de Genève et Lausanne",
+  "Trajet Genève–Lausanne",
   "Transferts aéroports",
   "Transferts gares",
   "Déplacements professionnels",

@@ -3,27 +3,27 @@ export const cars = {
   E: {
     title: "Mercedes Classe E",
     category: "Business Class",
-    image: "business",
+    image: "classe-e",
     description:
       "L’élégance et le confort pour vos déplacements professionnels et privés.",
   },
   S: {
     title: "Mercedes Classe S",
     category: "Prestige Class",
-    image: "prestige",
+    image: "classe-s",
     description: "Une expérience exclusive où chaque détail compte.",
   },
 } as const;
 export const services = [
   [
     "plane",
-    "Transferts aéroports",
-    "Organisez votre prise en charge au départ ou à l’arrivée d’un vol.",
+    "Aéroport de Genève",
+    "Retrouvez votre chauffeur à Genève Aéroport ou préparez votre départ pour un vol.",
   ],
   [
     "train",
-    "Transferts gares",
-    "Reliez le quai, votre hôtel ou votre prochain rendez-vous.",
+    "Gares de Genève et Lausanne",
+    "De Genève-Cornavin ou de la gare de Lausanne à votre hôtel ou votre rendez-vous.",
   ],
   [
     "case",
@@ -43,11 +43,12 @@ export const services = [
   [
     "compass",
     "Excursions privées",
-    "Dessinez un itinéraire à votre rythme, avec les haltes de votre choix.",
+    "Découvrez les rives du Léman à votre rythme, d’Ouchy aux vignobles de Lavaux.",
   ],
+  ["compass", "Trajet Genève–Lausanne", "Reliez les deux villes, de porte à porte, selon votre programme."],
 ] as const;
 export const agency: {
-  rates: Record<string, string>;
+  rates: Partial<Record<string, number>>;
   equipment: string[];
   reviews: { quote: string; author: string; source: string }[];
 } = { rates: {}, equipment: [], reviews: [] };
@@ -62,7 +63,7 @@ export const faqs = [
   ],
   [
     "Comment connaître le tarif de mon trajet ?",
-    "Le devis tient compte de votre itinéraire, de la durée et de la catégorie souhaitée. Indiquez vos étapes et votre temps d’attente éventuel dans les informations complémentaires.",
+    "Les prix confirmés sont exprimés en francs suisses (CHF). Le devis tient compte de votre itinéraire, de la durée et de la catégorie souhaitée. Indiquez vos étapes et votre temps d’attente éventuel dans les informations complémentaires.",
   ],
   [
     "Comment préciser un besoin particulier ?",

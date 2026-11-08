@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { equipmentFor } from "./equipment";
 
 type Point = [number, number, number];
 type Material = THREE.MeshStandardMaterial;
@@ -14,7 +15,7 @@ export function createSedan(variant: Variant): THREE.Group {
   const prestige = variant === "S";
   const car = new THREE.Group();
   car.name = prestige ? "Prestige" : "Business";
-  const buckets = new Map<Material, THREE.BufferGeometry[]>();
+  let buckets = new Map<Material, THREE.BufferGeometry[]>();
   function finish(
     name: string,
     color: number,
@@ -696,14 +697,178 @@ export function createSedan(variant: Variant): THREE.Group {
         [0, 0, Math.PI / 2],
       );
     }
-  for (const [material, parts] of buckets) {
-    const merged = mergeGeometries(parts);
-    const mesh = new THREE.Mesh(merged, material);
-    mesh.name = material.name;
-    mesh.castShadow = material !== glass;
-    mesh.receiveShadow = true;
-    car.add(mesh);
-    for (const part of parts) part.dispose();
+  function finishBatch(parent: THREE.Group) {
+    for (const [material, parts] of buckets) {
+      const mesh = new THREE.Mesh(mergeGeometries(parts), material);
+      mesh.name = material.name;
+      mesh.castShadow = !material.transparent;
+      mesh.receiveShadow = true;
+      parent.add(mesh);
+      for (const part of parts) part.dispose();
+    }
+    buckets = new Map();
+  }
+  finishBatch(car);
+
+  for (const item of equipmentFor(variant)) {
+    const accessory = new THREE.Group();
+    accessory.name = "accessory-" + item.id;
+    accessory.userData.equipment = item.id;
+    if (item.id === "charger") {
+      // The console ends at z=-.51. Both sockets and the trailing lead face the passenger.
+      box([0, 0.657, -0.511], [0.167, 0.102, 0.014], walnut, 0.009);
+      for (const x of [-0.047, 0.036]) {
+        box([x, 0.661, -0.521], [0.038, 0.018, 0.007], brushed, 0.007);
+        box([x, 0.661, -0.525], [0.03, 0.012, 0.004], black, 0.005);
+        box([x, 0.661, -0.528], [0.02, 0.003, 0.002], brushed, 0.001);
+      }
+      box([-0.047, 0.661, -0.544], [0.03, 0.019, 0.04], rubber, 0.006);
+      const cable: Point[] = [
+        [-0.047, 0.661, -0.557],
+        [-0.062, 0.651, -0.589],
+        [-0.069, 0.604, -0.626],
+        [-0.054, 0.57, -0.65],
+        [-0.008, 0.561, -0.658],
+        [0.045, 0.581, -0.642],
+        [0.057, 0.612, -0.612],
+        [0.052, 0.628, -0.564],
+      ];
+      tube(cable, 0.0065, black, 32);
+      tube(
+        cable.map(([x, y, z]) => [x - 0.002, y + 0.003, z]),
+        0.0024,
+        brushed,
+        32,
+      );
+      box([0.052, 0.629, -0.553], [0.025, 0.014, 0.036], rubber, 0.005);
+      box([0.052, 0.629, -0.529], [0.02, 0.007, 0.014], chrome, 0.003);
+    }
+    if (item.id === "water") {
+      const x = -0.708,
+        z = -0.796;
+      const cylinder = (
+        r1: number,
+        r2: number,
+        h: number,
+        y: number,
+        mat: Material,
+      ) => add(new THREE.CylinderGeometry(r1, r2, h, 28), mat, [x, y, z]);
+      const ring = (r: number, t: number, y: number, mat: Material) =>
+        add(
+          new THREE.TorusGeometry(r, t, 5, 28),
+          mat,
+          [x, y, z],
+          [Math.PI / 2, 0, 0],
+        );
+      const shell = finish("bottle", 0xc3e6ed, 0.06, 0.15, {
+        transparent: true,
+        opacity: 0.44,
+        depthWrite: false,
+      });
+      const water = finish("water", 0x79acb5, 0.11, 0.2, {
+        transparent: true,
+        opacity: 0.71,
+        depthWrite: false,
+      });
+      const paper = finish("bottle-label", 0xf7f1de, 0.02, 0.77);
+      const enamel = finish("cap", 0x284746, 0.32, 0.27);
+      box([-0.755, 0.621, z], [0.145, 0.077, 0.144], black, 0.02);
+      cylinder(0.058, 0.051, 0.085, 0.65, black);
+      ring(0.055, 0.005, 0.693, brushed);
+      const outline = [
+        [0.001, 0.653],
+        [0.035, 0.653],
+        [0.044, 0.661],
+        [0.047, 0.68],
+        [0.046, 0.709],
+        [0.045, 0.738],
+        [0.049, 0.75],
+        [0.049, 0.801],
+        [0.047, 0.83],
+        [0.042, 0.843],
+        [0.028, 0.863],
+        [0.019, 0.869],
+        [0.019, 0.892],
+        [0.001, 0.892],
+      ];
+      add(
+        new THREE.LatheGeometry(
+          outline.map(([r, y]) => new THREE.Vector2(r, y)),
+          32,
+        ),
+        shell,
+        [x, 0, z],
+      );
+      cylinder(0.044, 0.043, 0.137, 0.743, water);
+      cylinder(0.048, 0.048, 0.046, 0.767, paper);
+      for (const y of [0.749, 0.755, 0.779]) ring(0.048, 0.0018, y, enamel);
+      for (const y of [0.711, 0.72, 0.729, 0.815, 0.825])
+        ring(0.046, 0.0015, y, shell);
+      cylinder(0.023, 0.023, 0.026, 0.891, enamel);
+      for (let i = 0; i < 20; i++) {
+        const angle = (i * Math.PI) / 10;
+        box(
+          [x + 0.023 * Math.cos(angle), 0.891, z + 0.023 * Math.sin(angle)],
+          [0.0017, 0.02, 0.0017],
+          brushed,
+          0.0005,
+        );
+      }
+    }
+    if (item.id === "sweets") {
+      box([0, 0.634, -1.034], [0.207, 0.117, 0.35], leather, 0.028);
+      box([0, 0.703, -0.981], [0.174, 0.013, 0.177], walnut, 0.008);
+      for (const sign of [-1, 1]) {
+        box(
+          [sign * 0.084, 0.716, -0.981],
+          [0.009, 0.024, 0.178],
+          brushed,
+          0.004,
+        );
+        box(
+          [0, 0.716, -0.981 + sign * 0.085],
+          [0.166, 0.024, 0.009],
+          brushed,
+          0.004,
+        );
+      }
+      const foil = finish("champagne-wrapper", 0xbb9652, 0.6, 0.28);
+      const mint = finish("sage-wrapper", 0x688a80, 0.57, 0.31);
+      const rose = finish("copper-wrapper", 0xc08163, 0.55, 0.3);
+      for (const [x, z, angle, wrapper] of [
+        [-0.029, -1.025, 0.14, foil],
+        [0.025, -0.988, -0.41, mint],
+        [-0.025, -0.943, 0.38, rose],
+      ] as [number, number, number, Material][]) {
+        const centre: Point = [x, 0.729, z];
+        const geom = new THREE.SphereGeometry(1, 10, 7).scale(
+          0.024,
+          0.014,
+          0.016,
+        );
+        add(geom, wrapper, centre, [0, angle, 0]);
+        for (const sign of [-1, 1]) {
+          const xt = (d: number): Point => [
+            x + sign * d * Math.cos(angle),
+            0.729,
+            z - sign * d * Math.sin(angle),
+          ];
+          const paper = new THREE.CylinderGeometry(
+            0.011,
+            0.003,
+            0.016,
+            6,
+            1,
+            false,
+          );
+          paper.rotateZ((sign * -Math.PI) / 2);
+          add(paper, wrapper, xt(0.029), [0, angle, 0]);
+          oval(xt(0.021), [0.004, 0.006, 0.005], chrome);
+        }
+      }
+    }
+    finishBatch(accessory);
+    car.add(accessory);
   }
   return car;
 }

@@ -1,12 +1,9 @@
 import { useRef, useState, type FormEvent } from "react";
 import { cars, type Vehicle, services } from "./data";
 import { Icon } from "./icons";
+import { formatSwissDeparture, swissDepartures, swissZone, todayInSwitzerland } from "./swissTime";
 type Fields = Record<string, string>;
 const vehicleKeys: Vehicle[] = ["E", "S"];
-const today = () =>
-  new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 10);
 async function send(kind: string, data: Fields, key: string) {
   const response = await fetch("/api/" + kind, {
     method: "POST",
@@ -55,10 +52,14 @@ function Success({
 export function Booking({
   initial,
   service,
+  origin = "",
+  destination = "",
   onDone,
 }: {
   initial: Vehicle;
   service: string;
+  origin?: string;
+  destination?: string;
   onDone: () => void;
 }) {
   const [step, setStep] = useState(1),
@@ -66,12 +67,16 @@ export function Booking({
       vehicle: initial,
       service: service || services[0][1],
       passengers: "1",
+      origin,
+      destination,
     }),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [reference, setReference] = useState("");
   const key = useRef(crypto.randomUUID()),
     sending = useRef(false);
+  const choices = swissDepartures(data.date, data.time);
+  const when = choices.length === 1 ? choices[0] : choices.find(d => d.toISOString() === data.occurrence);
   function change(k: string, v: string) {
     setData((d) => ({ ...d, [k]: v }));
     key.current = crypto.randomUUID();
@@ -101,10 +106,10 @@ export function Booking({
     e.preventDefault();
     if (sending.current) return;
     setError("");
-    const when = new Date(data.date + "T" + data.time);
-    if (!(when.getTime() > Date.now())) {
+    if (!when || when.getTime() <= Date.now()) {
       setStep(1);
-      setError("Choisissez une date et une heure à venir.");
+      setError(!choices.length ? "Cette heure n’existe pas en Suisse à cette date. Choisissez une autre heure." :
+        !when ? "Précisez l’heure souhaitée lors du passage à l’heure d’hiver." : "Choisissez une date et une heure à venir.");
       return;
     }
     if (step === 1) {
@@ -120,7 +125,7 @@ export function Booking({
           {
             ...data,
             departureAt: when.toISOString(),
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timezone: swissZone,
           },
           key.current,
         ),
@@ -166,17 +171,22 @@ export function Booking({
               </select>
             </label>
             {field("origin", "Adresse de départ", "text", {
-              placeholder: "Adresse, gare ou aéroport",
+              placeholder: "Ex. Genève Aéroport, Arrivées",
             })}
             {field("destination", "Adresse de destination", "text", {
-              placeholder: "Votre destination",
+              placeholder: "Ex. Gare de Lausanne",
             })}
-            {field("date", "Date de départ", "date", { min: today() })}
+            {field("date", "Date de départ", "date", { min: todayInSwitzerland() })}
             {field("time", "Heure de départ", "time")}
             <small className="span2 muted">
-              Heure de votre appareil ·{" "}
-              {Intl.DateTimeFormat().resolvedOptions().timeZone}
+              Heure locale suisse · Europe/Zurich
             </small>
+            {choices.length === 2 && <label className="span2">Passage à l’heure d’hiver
+              <select required value={when?.toISOString() || ""} onChange={e => change("occurrence", e.target.value)}>
+                <option value="">Choisir le premier ou le second passage</option>
+                {choices.map(d => <option key={d.toISOString()} value={d.toISOString()}>{formatSwissDeparture(d)}</option>)}
+              </select>
+            </label>}
             <label>
               Passagers
               <select
@@ -189,14 +199,14 @@ export function Booking({
               </select>
             </label>
             <label>
-              Catégorie souhaitée
+              Catégorie Mercedes souhaitée
               <select
                 value={data.vehicle}
                 onChange={(e) => change("vehicle", e.target.value)}
               >
                 {vehicleKeys.map((k) => (
                   <option key={k} value={k}>
-                    {cars[k].category}
+                    {cars[k].title} · {cars[k].category}
                   </option>
                 ))}
               </select>
@@ -211,9 +221,7 @@ export function Booking({
                   {data.origin} → {data.destination}
                 </b>
                 <small>
-                  {new Date(data.date + "T" + data.time).toLocaleString(
-                    "fr-FR",
-                  )}{" "}
+                  {when && formatSwissDeparture(when)}{" "}
                   · {cars[data.vehicle as Vehicle].category} · {data.passengers}{" "}
                   pass.
                 </small>
@@ -222,6 +230,7 @@ export function Booking({
             {field("name", "Nom complet", "text", { autoComplete: "name" })}
             {field("phone", "Téléphone", "tel", {
               autoComplete: "tel",
+              placeholder: "+41 …",
               minLength: 6,
               maxLength: 30,
               title: "Numéro de téléphone, avec indicatif si nécessaire.",

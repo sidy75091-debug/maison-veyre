@@ -20,14 +20,14 @@ try {
       html = html
         .replace(
           /<title>.*?<\/title>/,
-          "<title>Contact — Maison Veyre, chauffeurs privés</title>",
+          "<title>Contact à Genève et Lausanne — Maison Veyre</title>",
         )
         .replace(
           /<meta\s+name="description"\s+content="[^"]*"\s*\/?>/,
-          '<meta name="description" content="Contactez Maison Veyre pour préparer votre déplacement avec chauffeur ou préciser un besoin particulier.">',
+          '<meta name="description" content="Contactez Maison Veyre pour préparer votre déplacement avec chauffeur à Genève et Lausanne ou préciser un besoin particulier.">',
         )
         .replace(
-          /<link rel="preload" as="image" href="\/images\/hero\.webp"\s*\/?>/,
+          /<link rel="preload" as="image" href="\/images\/geneve\.webp"\s*\/?>/,
           "",
         );
       await mkdir("dist/client/contact", { recursive: true });

@@ -6,6 +6,12 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import gsap from "gsap";
 import { Architecture } from "./Architecture";
 import { createSedan } from "./sedan";
+import {
+  equipment,
+  equipmentFor,
+  type EquipmentId,
+  type Equipment,
+} from "./equipment";
 import type { Vehicle } from "./data";
 export type View = "entrance" | "intro" | "overview" | "car" | "roof" | "cabin";
 type V3 = [number, number, number];
@@ -169,10 +175,70 @@ type Props = {
   reduced: boolean;
   select: (v: Vehicle) => void;
   onEnter: () => void;
-  showPoint: (s: string) => void;
+  point: EquipmentId | null;
+  showPoint: (s: EquipmentId) => void;
 };
+
+function EquipmentMarker({
+  item,
+  onSelect,
+}: {
+  item: Equipment;
+  onSelect: (id: EquipmentId) => void;
+}) {
+  const mark = useRef<T.Sprite>(null);
+  const world = useMemo(() => new T.Vector3(), []);
+  const texture = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 96;
+    const ctx = canvas.getContext("2d")!;
+    ctx.beginPath();
+    ctx.arc(48, 48, 36, 0, 2 * Math.PI);
+    ctx.fillStyle = "#151c1ae6";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#e5d3ab";
+    ctx.stroke();
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(32, 48);
+    ctx.lineTo(64, 48);
+    ctx.moveTo(48, 32);
+    ctx.lineTo(48, 64);
+    ctx.stroke();
+    return new T.CanvasTexture(canvas);
+  }, []);
+  useEffect(() => () => texture.dispose(), [texture]);
+  useFrame(({ camera, size }) => {
+    if (!mark.current) return;
+    const d = camera.position.distanceTo(mark.current.getWorldPosition(world));
+    const vFov = ((camera as T.PerspectiveCamera).fov * Math.PI) / 180;
+    const scale = (2 * d * Math.tan(vFov / 2) * 31) / Math.max(1, size.height);
+    mark.current.scale.setScalar(scale);
+  });
+  return (
+    <sprite
+      ref={mark}
+      position={item.marker}
+      onClick={(e) => {
+        if (e.delta < 4) {
+          e.stopPropagation();
+          onSelect(item.id);
+        }
+      }}
+    >
+      <spriteMaterial
+        map={texture}
+        transparent
+        depthWrite={false}
+        toneMapped={false}
+      />
+    </sprite>
+  );
+}
+
 export function Scene(props: Props) {
-  const { view, vehicle, reduced } = props;
+  const { view, vehicle, reduced, point } = props;
   const { camera, gl, size } = useThree();
   const controls = useMemo(
     () => new OrbitControls(camera, gl.domElement),
@@ -188,11 +254,12 @@ export function Scene(props: Props) {
     callbacks = useRef(props),
     keys = useRef(new Set<string>()),
     last = useRef(new T.Vector3()),
-    prev = useRef<View>("entrance");
+    prev = useRef<View | null>(null);
   callbacks.current = props;
   useEffect(
     () => () => {
       controls.dispose();
+      const used = new Set<T.Material>();
       Object.values(cars).forEach((g) =>
         g.traverse((obj) => {
           if (obj instanceof T.Mesh) {
@@ -200,10 +267,11 @@ export function Scene(props: Props) {
             const materials = Array.isArray(obj.material)
               ? obj.material
               : [obj.material];
-            materials.forEach((m) => m.dispose());
+            materials.forEach((m) => used.add(m));
           }
         }),
       );
+      used.forEach((m) => m.dispose());
     },
     [controls, cars],
   );
@@ -254,17 +322,45 @@ export function Scene(props: Props) {
     controls.enabled = false;
     controls.enablePan = false;
     controls.enableDamping = false;
-    controls.update();
-    controls.minDistance = 0.06;
+    controls.minDistance = 0.003;
     controls.maxDistance = 60;
     controls.maxPolarAngle = Math.PI;
     controls.minPolarAngle = 0.001;
     const lens = camera as T.PerspectiveCamera;
-    lens.fov = view === "car" ? 39 : view === "cabin" ? 65 : 48;
+    lens.fov = view === "car" ? 39 : cabin ? (point ? 45 : 69) : 48;
     lens.updateProjectionMatrix();
     const tl = gsap.timeline();
     busy.current = true;
     const duration = reduced ? 0.01 : 1.15;
+    const height = 3.3;
+    const starting = camera.position.toArray() as V3;
+    const inPassengerSpace =
+      Math.abs(starting[0] - x) < 0.78 &&
+      starting[1] < 1.44 &&
+      starting[2] > -1.28 &&
+      starting[2] < -0.37;
+    // Across a closed body or between distant viewpoints, cut on black. No
+    // interpolated camera positions are ever exposed inside an opaque panel.
+    const cut = (pos: V3, target: V3, time = 0) => {
+      const fade = reduced ? 0.001 : 0.16;
+      tl.to(gl.domElement, { opacity: 0, duration: fade }, time);
+      tl.set(camera.position, { x: pos[0], y: pos[1], z: pos[2] }, time + fade);
+      tl.set(
+        controls.target,
+        { x: target[0], y: target[1], z: target[2] },
+        time + fade,
+      );
+      tl.to(gl.domElement, { opacity: 1, duration: fade }, time + fade);
+      return time + fade;
+    };
+    const nearLook = (pos: V3, sight: V3): V3 => {
+      const direction = new T.Vector3(...sight)
+        .sub(new T.Vector3(...pos))
+        .normalize();
+      return new T.Vector3(...pos)
+        .addScaledVector(direction, 0.012)
+        .toArray() as V3;
+    };
     const move = (pos: V3, target: V3, start: number, len: number) => {
       tl.to(
         camera.position,
@@ -290,32 +386,116 @@ export function Scene(props: Props) {
       );
       move([0, 2.15, 7.5], [0, 0.9, -0.7], duration * 0.9, duration * 1.75);
     } else if (view === "entrance") {
-      move([0, 2.05, 16.5], [0, 1.45, 0], 0, duration);
+      if (was === "cabin") cut([0, 2.05, 16.5], [0, 1.45, 0]);
+      else {
+        move([starting[0], height, starting[2]], [0, 1, 0], 0, duration * 0.35);
+        move([0, 2.05, 16.5], [0, 1.45, 0], duration * 0.35, duration);
+      }
       tl.to(door.current!.position, { y: 0, duration }, duration * 0.85);
     } else {
       door.current!.position.y = 5.75;
       light.current!.intensity = 1.9;
-      let pos: V3,
-        target: V3,
-        begin = 0;
       if (view === "overview") {
-        pos = [0, size.width < 600 ? 2.8 : 2.15, size.width < 600 ? 9.2 : 7.8];
-        target = [0, 0.85, -0.85];
+        const pos: V3 = [
+          0,
+          size.width < 600 ? 2.8 : 2.15,
+          size.width < 600 ? 9.2 : 7.8,
+        ];
+        const target: V3 = [0, 0.85, -0.85];
+        if (was === "cabin" || was === "car" || was === "roof")
+          cut(pos, target);
+        else move(pos, target, 0, duration * 0.6);
       } else if (view === "car") {
-        pos = [x + (vehicle === "E" ? 3.9 : -3.9), 1.62, 4.65];
-        target = [x, 0.75, 0];
+        const side = vehicle === "E" ? 1 : -1;
+        const distance = size.width < 600 ? 7.3 : 6.05;
+        const target: V3 = [x, 0.74, 0];
+        const startAngle = 0.27,
+          endAngle = 0.81;
+        const approach: V3 = [
+          x + side * Math.sin(startAngle) * distance,
+          1.93,
+          Math.cos(startAngle) * distance,
+        ];
+        const startOrbit =
+          was === "cabin" || was === "car" || !was
+            ? cut(approach, target)
+            : duration * 0.85;
+        if (was && was !== "cabin" && was !== "car") {
+          move(
+            [starting[0], Math.max(starting[1], height), starting[2]],
+            target,
+            0,
+            duration * 0.24,
+          );
+          move(approach, target, duration * 0.24, duration * 0.61);
+        }
+        const turn = { angle: startAngle };
+        tl.to(
+          turn,
+          {
+            angle: endAngle,
+            duration: duration * 0.9,
+            ease: "sine.inOut",
+            onUpdate: () => {
+              camera.position.set(
+                x + side * Math.sin(turn.angle) * distance,
+                1.93 - (turn.angle - startAngle) * 0.52,
+                Math.cos(turn.angle) * distance,
+              );
+            },
+          },
+          startOrbit,
+        );
       } else if (view === "roof") {
-        pos = [x + 1.2, 4.3, 1.4];
-        target = [x, 0.6, -0.3];
+        const overhead: V3 = [x + 0.55, 3.52, 0.32];
+        const target: V3 = [x, 0.64, -0.5];
+        if (was === "cabin") cut(overhead, target);
+        else {
+          move(
+            [starting[0], Math.max(height, starting[1]), starting[2]],
+            target,
+            0,
+            duration * 0.45,
+          );
+          move(overhead, target, duration * 0.45, duration * 0.75);
+        }
       } else {
-        pos = [x + 0.38, 1.17, -0.72];
-        target = [x + 0.35, 1.13, -0.55];
+        const detail = point && equipment[point];
+        const eye: V3 = detail ? [...detail.eye] : [0.43, 1.235, -1.061];
+        const sight: V3 = detail ? [...detail.focus] : [-0.24, 0.7, -0.39];
+        eye[0] += x;
+        sight[0] += x;
+        const look = nearLook(eye, sight);
+        if (was === "cabin" && inPassengerSpace) {
+          // The close-up positions all stay in the space between the two seat rows.
+          move(eye, look, 0, duration * 0.63);
+        } else {
+          const window: V3 = [x + 1.16, 1.24, -0.774];
+          const windowLook = nearLook(window, sight);
+          let enter: number;
+          if (was === "car" || was === "roof") {
+            // Rise outside the shell, cross above the roof and lower beside
+            // the rear passenger window before moving through its open aperture.
+            move(
+              [starting[0], Math.max(starting[1], 2.5), starting[2]],
+              [x, 1, -0.72],
+              0,
+              duration * 0.28,
+            );
+            move(
+              [x + 1.35, 2.42, -0.77],
+              [x, 0.995, -0.56],
+              duration * 0.28,
+              duration * 0.42,
+            );
+            move(window, windowLook, duration * 0.7, duration * 0.32);
+            enter = duration * 1.02;
+          } else {
+            enter = cut(window, windowLook) + duration * 0.15;
+          }
+          move(eye, look, enter, duration * 0.8);
+        }
       }
-      if (view === "roof" || (cabin && was !== "roof")) {
-        move([x + 0.05, 4.8, -0.25], [x, 0.65, -0.3], 0, duration);
-        begin = duration * 0.97;
-      }
-      move(pos, target, begin, duration);
     }
     Object.entries(cars).forEach(([k, g]) => {
       const active = k === vehicle;
@@ -328,6 +508,7 @@ export function Scene(props: Props) {
               ? 1
               : ((mat.userData.baseOpacity ??= mat.opacity) as number);
           mat.transparent = true;
+          mat.depthWrite = o.name === "roof" && !(active && view === "roof");
           tl.to(
             mat,
             {
@@ -337,7 +518,9 @@ export function Scene(props: Props) {
                     ? cabin
                       ? 1
                       : 0.035
-                    : 0.08
+                    : cabin
+                      ? 0
+                      : 0.055
                   : base,
               duration,
             },
@@ -357,6 +540,19 @@ export function Scene(props: Props) {
         }
       });
     });
+    if (cabin && was !== "cabin" && !reduced) {
+      const reveal = tl.duration() - 0.28;
+      equipmentFor(vehicle).forEach((item, index) => {
+        const prop = cars[vehicle].getObjectByName("accessory-" + item.id);
+        if (prop)
+          tl.fromTo(
+            prop.position,
+            { y: -0.014 },
+            { y: 0, duration: 0.34, ease: "sine.out" },
+            reveal + index * 0.035,
+          );
+      });
+    }
     tl.eventCallback("onComplete", () => {
       busy.current = false;
       controls.enabled = !["intro", "entrance"].includes(view);
@@ -365,14 +561,14 @@ export function Scene(props: Props) {
       controls.dampingFactor = 0.1;
       controls.rotateSpeed = cabin ? -0.55 : 0.7;
       controls.minDistance = cabin
-        ? 0.12
+        ? 0.012
         : view === "car"
           ? 2.95
           : view === "roof"
             ? 2.1
             : 1.3;
       controls.maxDistance = cabin
-        ? 0.22
+        ? 0.012
         : view === "car"
           ? 7
           : view === "roof"
@@ -385,9 +581,15 @@ export function Scene(props: Props) {
     });
     return () => {
       tl.kill();
+      gl.domElement.style.opacity = "1";
+      Object.values(cars).forEach((car) =>
+        car.children.forEach((child) => {
+          if (child.userData.equipment) child.position.y = 0;
+        }),
+      );
       busy.current = false;
     };
-  }, [view, vehicle, cars, camera, controls, reduced, size.width]);
+  }, [view, vehicle, point, cars, camera, controls, gl, reduced, size.width]);
   useFrame((_, delta) => {
     if (busy.current) {
       camera.lookAt(controls.target);
@@ -466,7 +668,24 @@ export function Scene(props: Props) {
         <group key={k} position={[xOf(k), 0, 0]}>
           <primitive
             object={cars[k]}
-            onClick={(e: { stopPropagation: () => void; delta: number }) => {
+            onClick={(e: {
+              stopPropagation: () => void;
+              delta: number;
+              object: T.Object3D;
+            }) => {
+              const accessory = e.object.parent?.userData.equipment as
+                | EquipmentId
+                | undefined;
+              if (
+                e.delta < 4 &&
+                accessory &&
+                vehicle === k &&
+                (view === "cabin" || view === "roof")
+              ) {
+                e.stopPropagation();
+                callbacks.current.showPoint(accessory);
+                return;
+              }
               if (e.delta < 4 && ["overview", "car"].includes(view)) {
                 e.stopPropagation();
                 callbacks.current.select(k);
@@ -479,24 +698,25 @@ export function Scene(props: Props) {
             intensity={k === vehicle && view !== "overview" ? 11 : 3}
             distance={8}
           />
-          {vehicle === k &&
-            view === "roof" &&
-            [
-              ["Sellerie", 0.43, 0.96, -1],
-              ["Console", 0, 0.83, 0.34],
-            ].map(([s, x, y, z]) => (
-              <mesh
-                key={s}
-                position={[Number(x), Number(y), Number(z)]}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  callbacks.current.showPoint(String(s));
-                }}
-              >
-                <sphereGeometry args={[0.085, 14, 10]} />
-                <meshBasicMaterial color="#ffe0a0" />
-              </mesh>
-            ))}
+          {vehicle === k && (view === "cabin" || view === "roof") && (
+            <>
+              <pointLight
+                position={[0.12, 1.31, -0.74]}
+                color="#fff1da"
+                intensity={0.52}
+                distance={2.1}
+                decay={1}
+              />
+              {!point &&
+                equipmentFor(k).map((item) => (
+                  <EquipmentMarker
+                    key={item.id}
+                    item={item}
+                    onSelect={props.showPoint}
+                  />
+                ))}
+            </>
+          )}
         </group>
       ))}
     </>

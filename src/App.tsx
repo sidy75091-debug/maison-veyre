@@ -3,53 +3,16 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { agency, cars, faqs, services, type Vehicle } from "./data";
 import { Brand, Icon } from "./icons";
 import { Booking, ContactForm } from "./Forms";
+import { carPhotos } from "./carPhotos";
+import { placePhotos } from "./placePhotos";
+import { equipmentFor, availabilityLabel } from "./equipment";
 import { Dialog } from "./Dialog";
 
 const Garage = lazy(() => import("./Garage"));
 const models: Vehicle[] = ["E", "S"];
 const views = [
-  {
-    image: "hero",
-    title: "Extérieur du garage",
-    heading: (
-      <>
-        Bien plus qu’un trajet.
-        <br />
-        <em>Une expérience.</em>
-      </>
-    ),
-    eyebrow: "L’expérience chauffeur privé",
-    description:
-      "Découvrez l’excellence du transport privé, où confort, ponctualité et élégance accompagnent chaque déplacement.",
-  },
-  {
-    image: "showroom",
-    title: "Le showroom",
-    heading: (
-      <>
-        Le garage privé.
-        <br />
-        <em>Deux signatures.</em>
-      </>
-    ),
-    eyebrow: "La collection",
-    description:
-      "Explorez les silhouettes Business et Prestige et choisissez la catégorie qui accompagnera votre trajet.",
-  },
-  {
-    image: "cabin",
-    title: "L’habitacle",
-    heading: (
-      <>
-        À bord.
-        <br />
-        <em>En toute intimité.</em>
-      </>
-    ),
-    eyebrow: "Le confort intérieur",
-    description:
-      "Prenez place dans l’habitacle virtuel et découvrez la perspective d’un passager.",
-  },
+  {image:"geneve",title:"Genève · La rade",alt:"Le Jet d’eau de Genève et les quais au coucher du soleil"},
+  {image:"ouchy",title:"Lausanne · Ouchy",alt:"Le front de lac d’Ouchy, à Lausanne, vu du Léman"},
 ];
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
@@ -61,8 +24,8 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 }
 export function App({ path = "/" }: { path?: string }) {
   const [slide, setSlide] = useState(0),
-    [menu, setMenu] = useState(false),
-    [booking, setBooking] = useState<{ car: Vehicle; service: string } | null>(
+    [credits,setCredits] = useState(false), [menu, setMenu] = useState(false),
+    [booking, setBooking] = useState<{ car: Vehicle; service: string; origin?:string; destination?:string } | null>(
       null,
     ),
     [garage, setGarage] = useState<{
@@ -70,17 +33,17 @@ export function App({ path = "/" }: { path?: string }) {
       interior?: boolean;
     } | null>(null);
   const contact = path.replace(/\/$/, "") === "/contact";
-  const book = (car: Vehicle = "E", service = "") => {
+  const book = (car: Vehicle = "E", service = "", origin = "", destination = "") => {
     setGarage(null);
     setMenu(false);
-    setBooking({ car, service });
+    setBooking({ car, service, origin, destination });
   };
   const openGarage = (car?: Vehicle, interior = false) =>
     setGarage({ car, interior });
   const view = views[slide],
     home = contact ? "/" : "";
   useEffect(() => {
-    if (contact) document.title = "Contact — Maison Veyre, chauffeurs privés";
+    if (contact) document.title = "Contact à Genève et Lausanne — Maison Veyre";
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setMenu(false);
     }
@@ -137,7 +100,7 @@ export function App({ path = "/" }: { path?: string }) {
               <em>votre trajet.</em>
             </h1>
             <p>
-              Une question sur une prestation ou un déplacement particulier ?
+              Un transfert à Genève, un rendez-vous à Lausanne ou une excursion sur les rives du Léman ?
               Écrivez à Maison Veyre.
             </p>
             <button className="link" onClick={() => book()}>
@@ -153,68 +116,67 @@ export function App({ path = "/" }: { path?: string }) {
       ) : (
         <main id="content">
           <section
-            className={"hero slide-" + slide}
+            className={"hero swisshero slide-" + slide}
             aria-label="Présentation de Maison Veyre"
           >
             <img
               className="heroimg"
               key={view.image}
               src={"/images/" + view.image + ".webp"}
-              alt={view.title}
+              alt={view.alt}
               fetchPriority="high"
             />
             <div className="heroshade" />
-            <div className="herocontent page" key={slide}>
-              <Eyebrow>{view.eyebrow}</Eyebrow>
-              <h1>{view.heading}</h1>
-              <p>{view.description}</p>
+            <div className="herocontent page">
+              <div className="swiss-kicker"><i aria-hidden="true" />Genève • Lausanne • Suisse</div>
+              <h1>Votre chauffeur privé<br/><em>à Genève et Lausanne.</em></h1>
+              <p>L’élégance du transport privé au cœur de la Suisse romande. Des trajets pensés pour votre confort, vos rendez-vous et vos déplacements.</p>
               <div className="herolinks">
-                <button
-                  className="button gold enter"
-                  onClick={() =>
-                    openGarage(slide === 2 ? "S" : undefined, slide === 2)
-                  }
-                >
-                  <Icon name="cube" size={18} />
-                  Entrer dans notre univers <Icon name="arrow" size={17} />
-                </button>
-                <a className="skipintro" href="#showroom">
-                  Passer l’introduction <Icon name="diagonal" size={14} />
-                </a>
+                <button className="button gold enter" onClick={()=>book()}>Réserver un chauffeur <Icon name="arrow" size={17}/></button>
+                <a className="button ghost-route" href="#showroom">Découvrir nos véhicules</a>
               </div>
             </div>
+            <button className="hero-car" onClick={()=>openGarage("E")} aria-label="Explorer la Classe E dans le garage">
+              <img src="/images/classe-e.webp" alt="Mercedes Classe E noire, vue avant" />
+              <span><small>La collection</small>Mercedes Classe E</span><Icon name="diagonal" size={15}/>
+            </button>
             <div className="herobar page">
               <div className="viewindex">
                 <b>0{slide + 1}</b>
                 <span className="track">
-                  <i style={{ width: ((slide + 1) / 3) * 100 + "%" }} />
+                  <i style={{ width: ((slide + 1) / views.length) * 100 + "%" }} />
                 </span>
-                <span>03</span>
+                <span>02</span>
                 <div className="viewname">{view.title}</div>
               </div>
               <div className="herocontrols">
                 <button
                   className="iconbtn"
                   aria-label="Vue précédente"
-                  onClick={() => setSlide((slide + 2) % 3)}
+                  onClick={() => setSlide((slide - 1 + views.length) % views.length)}
                 >
                   <Icon name="left" size={16} />
                 </button>
                 <button
                   className="iconbtn"
                   aria-label="Vue suivante"
-                  onClick={() => setSlide((slide + 1) % 3)}
+                  onClick={() => setSlide((slide + 1) % views.length)}
                 >
                   <Icon name="right" size={16} />
                 </button>
               </div>
             </div>
           </section>
+          <div className="route-strip"><div className="page"><span>Préparer mon trajet</span>
+            <button onClick={()=>book("E","Aéroport de Genève","Aéroport de Genève (GVA)")}>Genève Aéroport <Icon name="diagonal" size={13}/></button>
+            <button onClick={()=>book("E","Trajet Genève–Lausanne","Genève","Lausanne")}>Genève → Lausanne <Icon name="diagonal" size={13}/></button>
+            <button onClick={()=>book("E","Gares de Genève et Lausanne","Gare de Lausanne")}>Gare de Lausanne <Icon name="diagonal" size={13}/></button>
+          </div></div>
           <section className="page section fleet" id="showroom">
             <Eyebrow>Le showroom</Eyebrow>
             <div className="sectionhead">
               <h2>
-                Notre collection <em>privée.</em>
+                Les berlines <em>Mercedes.</em>
               </h2>
               <button className="link" onClick={() => openGarage()}>
                 <Icon name="cube" size={17} />
@@ -231,7 +193,7 @@ export function App({ path = "/" }: { path?: string }) {
                   >
                     <img
                       src={"/images/" + cars[k].image + ".webp"}
-                      alt={"Illustration de la berline " + cars[k].category}
+                      alt={"Photographie de référence : " + cars[k].title + " noire"}
                       loading="lazy"
                     />
                     <span className="carclass">{cars[k].category}</span>
@@ -250,7 +212,7 @@ export function App({ path = "/" }: { path?: string }) {
               ))}
             </div>
             <p className="caption">
-              Modèles de référence illustrés. Le véhicule attribué sera confirmé
+              Photographies de référence. Le véhicule attribué sera confirmé
               par l’agence.
             </p>
           </section>
@@ -279,25 +241,21 @@ export function App({ path = "/" }: { path?: string }) {
           <section className="page section" id="maison">
             <div className="maison">
               <img
-                src="/images/cabin.webp"
-                alt="Illustration d’un habitacle en cuir cognac"
+                src="/images/ouchy.webp"
+                alt="Les façades lausannoises du quartier d’Ouchy, vues du lac Léman"
                 loading="lazy"
               />
               <div>
                 <Eyebrow>La maison</Eyebrow>
                 <h2>
-                  Le sens <em>du détail.</em>
+                  Au fil <em>du Léman.</em>
                 </h2>
                 <p>
-                  Notre engagement commence avant le départ : préciser le lieu
-                  de rencontre, prendre en compte vos contraintes horaires et
-                  préparer un trajet discret.
+                  D’un accueil à Genève-Cornavin à un rendez-vous sur les quais d’Ouchy, chaque départ commence par un lieu et une heure convenus avec vous.
                 </p>
                 <h3>Le confort à bord</h3>
                 <p>
-                  {agency.equipment.length
-                    ? agency.equipment.join(" · ")
-                    : "Indiquez vos préférences à la réservation. Les équipements à bord et les possibilités d’accueil seront précisés avec le véhicule proposé."}
+                  {equipmentFor("S").length ? equipmentFor("S").map((item,i)=><span key={item.id}>{i ? " · " : ""}{item.title} ({availabilityLabel("S",item.id).startsWith("Disponibilité confirmée") ? "confirmé en Prestige" : "sur demande"})</span>) : "Précisez vos préférences lors de la réservation."}
                 </p>
                 <button className="link" onClick={() => openGarage("S", true)}>
                   Découvrir l’intérieur <Icon name="arrow" size={16} />
@@ -313,13 +271,13 @@ export function App({ path = "/" }: { path?: string }) {
               </h2>
               <div className="rates">
                 {[
-                  "Transferts aéroports",
+                  "Aéroport de Genève",
                   "Mise à disposition",
                   "Excursions privées",
                 ].map((s) => (
                   <div key={s}>
                     <h3>{s}</h3>
-                    <p>{agency.rates[s] || "Sur devis"}</p>
+                    <p>{agency.rates[s] != null ? new Intl.NumberFormat("fr-CH",{style:"currency",currency:"CHF"}).format(agency.rates[s]!) : "Sur devis"}</p>
                     <button className="link" onClick={() => book("E", s)}>
                       Demander un devis <Icon name="arrow" size={15} />
                     </button>
@@ -386,11 +344,13 @@ export function App({ path = "/" }: { path?: string }) {
         <a href="/" aria-label="Maison Veyre, accueil">
           <Brand />
         </a>
+        <button className="creditlink" onClick={()=>setCredits(true)}>Crédits photos</button>
         <span>© {new Date().getFullYear()} Maison Veyre</span>
         <a href="/contact">
           Contact <Icon name="diagonal" size={13} />
         </a>
       </footer>
+      {credits && <Dialog label="Crédits photographiques" onClose={()=>setCredits(false)}><div className="photocredits"><h2>Crédits photographiques</h2>{[...placePhotos,...carPhotos].map(p=><p key={p.source}><a href={p.source}>{p.label}</a><br/>{p.author} · <a href={p.licenseUrl}>{p.license}</a><br/>{p.changes}</p>)}</div></Dialog>}
       {garage && (
         <Dialog
           wide
@@ -410,7 +370,7 @@ export function App({ path = "/" }: { path?: string }) {
         <Dialog label="Réserver un chauffeur" onClose={() => setBooking(null)}>
           <Booking
             initial={booking.car}
-            service={booking.service}
+            service={booking.service} origin={booking.origin} destination={booking.destination}
             onDone={() => setBooking(null)}
           />
         </Dialog>

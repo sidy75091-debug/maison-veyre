@@ -3,6 +3,12 @@ import { Canvas } from "@react-three/fiber";
 import { cars, type Vehicle } from "./data";
 import { Icon } from "./icons";
 import { Scene, type View } from "./Scene";
+import {
+  equipmentFor,
+  equipment,
+  availabilityLabel,
+  type EquipmentId,
+} from "./equipment";
 class Boundary extends Component<
   { fallback: () => void; children: ReactNode },
   { failed: boolean }
@@ -33,23 +39,29 @@ export default function Garage({
     ),
     [flat, setFlat] = useState(false),
     [notice, setNotice] = useState(""),
-    [point, setPoint] = useState(""),
+    [point, setPoint] = useState<EquipmentId | null>(null),
     [help, setHelp] = useState(false);
   const reduced = useRef(
     matchMedia("(prefers-reduced-motion: reduce)").matches,
   ).current;
   function select(v: Vehicle) {
     setVehicle(v);
-    setPoint("");
+    setPoint(null);
     setView("car");
   }
   function goto(v: View) {
     setView(v);
-    setPoint("");
+    setPoint(null);
+  }
+  function showPoint(id: EquipmentId) {
+    setPoint(id);
+    setView("cabin");
   }
   function fallback() {
     setFlat(true);
-    setNotice("La visite photographique est disponible sur cet appareil.");
+    setNotice(
+      "La 3D est indisponible sur cet appareil. La galerie d’illustrations et les fiches des équipements restent accessibles.",
+    );
     setView((v) => (v === "intro" ? "overview" : v));
   }
   useEffect(() => {
@@ -63,7 +75,7 @@ export default function Garage({
           <Icon name="cube" size={16} /> Le garage privé
         </span>
         <span className="garagebadge">
-          {flat ? "Visite photo" : "Showroom 3D"}
+          {flat ? "Galerie 2D" : "Showroom 3D"}
         </span>
       </div>
       <div
@@ -79,9 +91,9 @@ export default function Garage({
             className="flatimg"
             alt={
               interiorView
-                ? "Habitacle illustratif"
+                ? "Illustration d’un habitacle de berline haut de gamme"
                 : view === "car"
-                  ? cars[vehicle].title
+                  ? "Illustration de la catégorie " + cars[vehicle].category
                   : "Les deux berlines du showroom"
             }
             src={
@@ -104,7 +116,7 @@ export default function Garage({
               camera={{
                 fov: 48,
                 position: [0, 2.15, 16.5],
-                near: 0.035,
+                near: 0.012,
                 far: 100,
               }}
               gl={{
@@ -129,7 +141,8 @@ export default function Garage({
                 reduced={reduced}
                 select={select}
                 onEnter={() => setView((v) => (v === "intro" ? "overview" : v))}
-                showPoint={setPoint}
+                point={point}
+                showPoint={showPoint}
               />
             </Canvas>
           </Boundary>
@@ -143,7 +156,7 @@ export default function Garage({
               if (view === "intro") goto("overview");
             }}
           >
-            {flat ? "Ouvrir en 3D" : "Vue photo"}
+            {flat ? "Ouvrir en 3D" : "Galerie 2D"}
           </button>
           <button
             className="iconbtn"
@@ -177,34 +190,41 @@ export default function Garage({
             Entrer dans le garage <Icon name="arrow" size={16} />
           </button>
         )}
-        {interiorView && (
-          <div className="hotspots">
-            {["Sellerie", "Console"].map((t) => (
-              <button key={t} onClick={() => setPoint(t)}>
-                <Icon name="plus" size={13} />
-                {t}
-              </button>
-            ))}
-          </div>
-        )}
-        {point && (
-          <div className="pointinfo" role="status">
-            <b>{point}</b>
-            <span>
-              {point === "Sellerie"
-                ? "Sièges sculptés et appuie-têtes du modèle de démonstration."
-                : "Console centrale et commandes illustrées de la berline."}
-            </span>
-            <button
-              aria-label="Fermer le point d’information"
-              onClick={() => setPoint("")}
-            >
-              <Icon name="close" size={14} />
-            </button>
-          </div>
-        )}
       </div>
       <div className="garagepanel">
+        {interiorView && (
+          <div className="cabin-equipment">
+            <div
+              className="cabin-options"
+              role="group"
+              aria-label="Explorer les équipements proposés"
+            >
+              {equipmentFor(vehicle).map((item) => (
+                <button
+                  key={item.id}
+                  className="glassbtn"
+                  aria-pressed={point === item.id}
+                  onClick={() => showPoint(item.id)}
+                >
+                  <Icon name="plus" size={13} />
+                  {item.title}
+                </button>
+              ))}
+            </div>
+            {point && (
+              <div className="cabin-description" role="status">
+                <p>
+                  <strong>{equipment[point].title}.</strong>{" "}
+                  {equipment[point].description}{" "}
+                  {availabilityLabel(vehicle, point)}
+                </p>
+                <button className="link" onClick={() => setPoint(null)}>
+                  {flat ? "Fermer la fiche" : "Revenir à la vue passager"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         <div className="garagetabs">
           {(["E", "S"] as Vehicle[]).map((v) => (
             <button
@@ -261,10 +281,7 @@ export default function Garage({
               )}
             </>
           ) : (
-            <button
-              className="link"
-              onClick={() => goto(flat ? "cabin" : "roof")}
-            >
+            <button className="link" onClick={() => goto("cabin")}>
               <Icon name="seat" size={16} />
               Découvrir l’intérieur
             </button>
@@ -274,8 +291,11 @@ export default function Garage({
           </button>
         </div>
         <small className="caption">
-          Berlines génériques de démonstration · Équipements du véhicule à
-          confirmer.
+          {flat
+            ? "Illustrations de présentation. "
+            : "Modèles 3D temporaires de berlines génériques. "}
+          Les Mercedes Classe E et Classe S sont les références des catégories
+          présentées.
         </small>
       </div>
     </div>
