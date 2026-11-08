@@ -1,0 +1,31 @@
+{
+  "name": "maison-veyre",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.15.1",
+  "scripts": {
+    "dev": "node server/local.mjs --dev",
+    "start": "node server/local.mjs",
+    "build": "tsc --noEmit && vite build && node server/prerender.mjs && node server/build-worker.mjs",
+    "check": "tsc --noEmit",
+    "build:vercel": "tsc --noEmit && vite build && node server/prerender.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/cormorant-garamond": "^5.2.5",
+    "@fontsource-variable/dm-sans": "^5.2.5",
+    "@react-three/fiber": "^9.3.0",
+    "@vercel/blob": "^2.8.2",
+    "gsap": "^3.13.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "three": "^0.179.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.9",
+    "@types/react-dom": "^19.1.7",
+    "@types/three": "^0.179.0",
+    "typescript": "^5.8.3",
+    "vite": "^7.1.2"
+  }
+}

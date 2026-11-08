@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS requests (
+  idempotency_key TEXT PRIMARY KEY NOT NULL,
+  reference TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

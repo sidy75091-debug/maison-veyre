@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.local/
+.sites-runtime/
+.openai/*.tar.gz
+*.log
+.vercel/
+.env*
+.openai/
